@@ -2,7 +2,10 @@ language: c
 
 compiler:
   - gcc
-  - clang
+
+env:
+  global:
+    - secure: "MzjiD4nqn4uOCX44y6mAeGEjqgiIkVywMcgOnVG7Z8oqtwGQmJg7okrIQmSlQq1siCTvX8diKjbXB50xqxHcNv2pBWsG63BpxfcWhjyIMuTd2RKy97n9I1ZYG/a/9oXILqi3bgMjYzlu162eV3vx8chLUUbo4nngBaRwwBntM2g="
 
 before_install:
   - sudo apt-get -qq update
@@ -12,3 +15,12 @@ install:
 
 script:
   - make
+
+addons:
+  coverity_scan:
+    project:
+      name: "sjinks/ssh-honeypotd"
+      description: "Low-Interaction SSH Honeypot"
+    notification_email: volodymyr@wildwolf.name
+    build_command: "make"
+    branch_pattern: coverity
