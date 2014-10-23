@@ -20,6 +20,7 @@ static void set_options(struct globals_t* globals)
 {
 	ssh_bind_options_set(globals->sshbind, SSH_BIND_OPTIONS_BINDADDR, globals->bind_address);
 	ssh_bind_options_set(globals->sshbind, SSH_BIND_OPTIONS_BINDPORT_STR, globals->bind_port);
+
 	if (globals->dsa_key) {
 		ssh_bind_options_set(globals->sshbind, SSH_BIND_OPTIONS_DSAKEY, globals->dsa_key);
 	}
@@ -27,6 +28,12 @@ static void set_options(struct globals_t* globals)
 	if (globals->rsa_key) {
 		ssh_bind_options_set(globals->sshbind, SSH_BIND_OPTIONS_RSAKEY, globals->rsa_key);
 	}
+
+	if (globals->host_key) {
+		ssh_bind_options_set(globals->sshbind, SSH_BIND_OPTIONS_HOSTKEY, globals->host_key);
+	}
+
+	ssh_bind_options_set(globals->sshbind, SSH_BIND_OPTIONS_BANNER, "OpenSSH");
 }
 
 static void daemonize(struct globals_t* globals)

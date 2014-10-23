@@ -7,9 +7,15 @@ Makefile.in
 /install-sh
 /missing
 /stamp-h1
-*.d
-*.o
+/*.d
+/*.o
 ssh-honeypotd
 /.cproject
 /.project
 /.settings
+/debian/files
+/debian/*.debhelper.log
+/debian/*.debhelper
+/debian/*.substvars
+/debian/ssh-honeypotd
+/debian/ssh-honeypotd-dbg
