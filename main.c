@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <syslog.h>
 #include <errno.h>
+#include <sys/resource.h>
 #include <libssh/server.h>
 #include "globals.h"
 #include "daemon.h"
@@ -58,10 +59,21 @@ static void daemonize(struct globals_t* globals)
 		exit(EXIT_FAILURE);
 	}
 
-	if (daemon(0, 0)) {
-		perror("daemon");
-		free_globals(globals);
-		exit(EXIT_FAILURE);
+	if (!globals->foreground) {
+		if (daemon(0, 0)) {
+			perror("daemon");
+			free_globals(globals);
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	{
+		struct rlimit lim;
+		lim.rlim_cur = 0;
+		lim.rlim_max = 0;
+		if (-1 == setrlimit(RLIMIT_NPROC, &lim)) {
+			syslog(LOG_WARNING, "Failed to set RLIMIT_NPROC to 0: %s", strerror(errno));
+		}
 	}
 }
 
@@ -84,8 +96,8 @@ void spawn_thread(struct globals_t* globals, pthread_attr_t* attr, ssh_session s
 		if (!globals->head) globals->head       = conn;
 		if (globals->tail)  globals->tail->next = conn;
 
-		globals->tail = conn;
 		conn->prev    = globals->tail;
+		globals->tail = conn;
 		num_threads   = globals->n_threads;
 		++globals->n_threads;
 	}

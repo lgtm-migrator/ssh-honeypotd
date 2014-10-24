@@ -29,7 +29,10 @@ void init_globals(struct globals_t* g)
 
 	g->sshbind = ssh_bind_new();
 
-	g->pid_fd = -1;
+	g->pid_fd     = -1;
+	g->foreground = 0;
+	g->uid_set    = 0;
+	g->gid_set    = 0;
 }
 
 static void wait_for_threads(struct globals_t* g)
