@@ -10,17 +10,20 @@
 #include "cmdline.h"
 
 static struct option long_options[] = {
-	{ "rsakey",  required_argument, 0, 'r' },
-	{ "dsakey",  required_argument, 0, 'd' },
-	{ "hostkey", required_argument, 0, 'k' },
-	{ "address", required_argument, 0, 'b' },
-	{ "port",    required_argument, 0, 'p' },
-	{ "pid",     required_argument, 0, 'P' },
-	{ "name",    required_argument, 0, 'n' },
-	{ "user",    required_argument, 0, 'u' },
-	{ "group",   required_argument, 0, 'g' },
-	{ "help",    no_argument,       0, 'h' },
-	{ "version", no_argument,       0, 'v' }
+	{ "rsa-key",   required_argument, 0, 'r' },
+	{ "dsa-key",   required_argument, 0, 'd' },
+#ifdef SSH_BIND_OPTIONS_ECDSAKEY
+	{ "ecdsa-key", required_argument, 0, 'e' },
+#endif
+	{ "host-key",  required_argument, 0, 'k' },
+	{ "address",   required_argument, 0, 'b' },
+	{ "port",      required_argument, 0, 'p' },
+	{ "pid",       required_argument, 0, 'P' },
+	{ "name",      required_argument, 0, 'n' },
+	{ "user",      required_argument, 0, 'u' },
+	{ "group",     required_argument, 0, 'g' },
+	{ "help",      no_argument,       0, 'h' },
+	{ "version",   no_argument,       0, 'v' }
 };
 
 static void usage(struct globals_t* g)
@@ -31,11 +34,14 @@ static void usage(struct globals_t* g)
 		"Mandatory arguments to long options are mandatory for short options too.\n"
 		"  -r, --rsa-key FILE    the file containing the private host RSA key (SSH2)\n"
 		"  -d, --dsa-key FILE    the file containing the private host DSA key (SSH2)\n"
+#ifdef SSH_BIND_OPTIONS_ECDSAKEY
+		"  -e, --ecdsa-key FILE  the file containing the private host ECDSA key (SSH2)\n"
+#endif
 		"  -k, --host-key FILE   the file containing the private host key (SSH1)\n"
 		"  -b, --address ADDRESS the IP address to bind to (default: 0.0.0.0)\n"
 		"  -p, --port PORT       the port to bind to (default: 22)\n"
 		"  -P, --pid FILE        the PID file\n"
-		"                        (default: /var/run/ssh-honeypotd/ssh-honeypotd.pid)\n"
+		"                        (default: /run/ssh-honeypotd/ssh-honeypotd.pid)\n"
 		"  -n, --name NAME       the name of the daemon for syslog\n"
 		"                        (default: ssh-honeypotd)\n"
 		"  -u, --user USER       drop privileges and switch to this USER\n"
@@ -56,7 +62,7 @@ static void usage(struct globals_t* g)
 static void version(struct globals_t* g)
 {
 	printf(
-		"ssh-honeypotd 0.2\n"
+		"ssh-honeypotd 0.3\n"
 		"Copyright (c) 2014, Volodymyr Kolesnykov <volodymyr@wildwolf.name>\n"
 		"License: MIT <http://opensource.org/licenses/MIT>\n"
 	);
@@ -90,6 +96,16 @@ void parse_options(int argc, char** argv, struct globals_t* g)
 
 				g->dsa_key = strdup(optarg);
 				break;
+
+#ifdef SSH_BIND_OPTIONS_ECDSAKEY
+			case 'e':
+				if (g->ecdsa_key) {
+					free(g->ecdsa_key);
+				}
+
+				g->ecdsa_key = strdup(optarg);
+				break;
+#endif
 
 			case 'k':
 				if (g->host_key) {
@@ -197,7 +213,7 @@ void parse_options(int argc, char** argv, struct globals_t* g)
 	}
 
 	if (!g->pid_file) {
-		g->pid_file = strdup("/var/run/ssh-honeypotd/ssh-honeypotd.pid");
+		g->pid_file = strdup("/run/ssh-honeypotd/ssh-honeypotd.pid");
 	}
 	else if (g->pid_file[0] != '/') {
 		char buf[PATH_MAX+1];
