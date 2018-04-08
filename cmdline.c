@@ -12,7 +12,7 @@
 static struct option long_options[] = {
 	{ "rsa-key",    required_argument, 0, 'r' },
 	{ "dsa-key",    required_argument, 0, 'd' },
-#ifdef SSH_BIND_OPTIONS_ECDSAKEY
+#if LIBSSH_VERSION_INT >= SSH_VERSION_INT(0, 6, 4)
 	{ "ecdsa-key",  required_argument, 0, 'e' },
 #endif
 	{ "host-key",   required_argument, 0, 'k' },
@@ -37,12 +37,7 @@ static void usage(struct globals_t* g)
 		"Usage: ssh-honeypotd [options]...\n"
 		"Low-interaction SSH honeypot\n\n"
 		"Mandatory arguments to long options are mandatory for short options too.\n"
-		"  -r, --rsa-key FILE    the file containing the private host RSA key (SSH2)\n"
-		"  -d, --dsa-key FILE    the file containing the private host DSA key (SSH2)\n"
-#ifdef SSH_BIND_OPTIONS_ECDSAKEY
-		"  -e, --ecdsa-key FILE  the file containing the private host ECDSA key (SSH2)\n"
-#endif
-		"  -k, --host-key FILE   the file containing the private host key (SSH1)\n"
+		"  -k, --host-key FILE   the file containing the private host key (RSA, DSA, ECDSA, ED25519)\n"
 		"  -b, --address ADDRESS the IP address to bind to (default: 0.0.0.0)\n"
 		"  -p, --port PORT       the port to bind to (default: 22)\n"
 		"  -P, --pid FILE        the PID file\n"
@@ -56,7 +51,7 @@ static void usage(struct globals_t* g)
 		"  -f, --foreground      do not daemonize\n"
 		"  -h, --help            display this help and exit\n"
 		"  -v, --version         output version information and exit\n\n"
-		"One of -r, -d, or -k must be specified.\n\n"
+		"-k option must be specified at least once.\n\n"
 		"Please report bugs here: <https://github.com/sjinks/ssh-honeypotd/issues>\n"
 	);
 
@@ -69,7 +64,7 @@ __attribute__((noreturn))
 static void version(struct globals_t* g)
 {
 	printf(
-		"ssh-honeypotd 0.4\n"
+		"ssh-honeypotd 0.5\n"
 		"Copyright (c) 2014-2017, Volodymyr Kolesnykov <volodymyr@wildwolf.name>\n"
 		"License: MIT <http://opensource.org/licenses/MIT>\n"
 	);
@@ -81,79 +76,64 @@ void parse_options(int argc, char** argv, struct globals_t* g)
 {
 	while (1) {
 		int option_index = 0;
-#ifdef SSH_BIND_OPTIONS_ECDSAKEY
 		int c = getopt_long(argc, argv, "r:d:e:k:b:p:P:n:u:g:vfh", long_options, &option_index);
-#else
-		int c = getopt_long(argc, argv, "r:d:k:b:p:P:n:u:g:vfh", long_options, &option_index);
-#endif
 		if (-1 == c) {
 			break;
 		}
 
 		switch (c) {
 			case 'r':
-				if (g->rsa_key) {
-					free(g->rsa_key);
-				}
-
-				g->rsa_key = strdup(optarg);
-				break;
-
 			case 'd':
-				if (g->dsa_key) {
-					free(g->dsa_key);
-				}
-
-				g->dsa_key = strdup(optarg);
-				break;
-
-#ifdef SSH_BIND_OPTIONS_ECDSAKEY
 			case 'e':
-				if (g->ecdsa_key) {
-					free(g->ecdsa_key);
+			case 'k': {
+				ssh_key key;
+				int rc = ssh_pki_import_privkey_file(optarg, NULL, NULL, NULL, &key);
+				if (-1 == rc) {
+					fprintf(stderr, "WARNING: failed to import the key from %s\n", optarg);
+					break;
 				}
 
-				g->ecdsa_key = strdup(optarg);
-				break;
+				int key_type = ssh_key_type(key);
+				char* loc;
+				switch (key_type) {
+					case SSH_KEYTYPE_DSS:     loc = g->dsa_key;     break;
+					case SSH_KEYTYPE_RSA:     loc = g->rsa_key;     break;
+					case SSH_KEYTYPE_RSA1:    loc = g->rsa_key;     break;
+#ifdef SSH_KEYTYPE_ECDSA
+					case SSH_KEYTYPE_ECDSA:   loc = g->ecdsa_key;   break;
 #endif
-
-			case 'k':
-				if (g->host_key) {
-					free(g->host_key);
+#ifdef SSH_KEYTYPE_ED25519
+					case SSH_KEYTYPE_ED25519: loc = g->ed25519_key; break;
+#endif
+					default:
+						fprintf(stderr, "WARNING: unsupported key type in %s\n", optarg);
+						loc = NULL;
+						break;
 				}
 
-				g->host_key = strdup(optarg);
-				break;
+				if (loc) {
+					free(loc);
+					loc = strdup(optarg);
+				}
+			}
 
 			case 'b':
-				if (g->bind_address) {
-					free(g->bind_address);
-				}
-
+				free(g->bind_address);
 				g->bind_address = strdup(optarg);
 				break;
 
 			case 'p':
-				if (g->bind_port) {
-					free(g->bind_port);
-				}
-
+				free(g->bind_port);
 				g->bind_port = strdup(optarg);
 				break;
 
 			case 'P':
-				if (g->pid_file) {
-					free(g->pid_file);
-				}
-
+				free(g->pid_file);
 				g->pid_file = strdup(optarg);
 				break;
 
 			case 'n':
-				if (g->daemon_name) {
-					free(g->daemon_name);
-				}
-
+				free(g->daemon_name);
 				g->daemon_name = strdup(optarg);
 				break;
 
