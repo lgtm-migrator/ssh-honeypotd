@@ -10,21 +10,13 @@ env:
   global:
     - secure: "MzjiD4nqn4uOCX44y6mAeGEjqgiIkVywMcgOnVG7Z8oqtwGQmJg7okrIQmSlQq1siCTvX8diKjbXB50xqxHcNv2pBWsG63BpxfcWhjyIMuTd2RKy97n9I1ZYG/a/9oXILqi3bgMjYzlu162eV3vx8chLUUbo4nngBaRwwBntM2g="
 
-addons:
-  apt:
-    packages:
-    - libssh-dev
-    - git-buildpackage
-    - dh-apparmor
-    - dh-systemd
-    - devscripts
-    - debhelper
-    - fakeroot
-
 script:
   - make
 
 addons:
+  apt:
+    packages:
+    - libssh-dev
   coverity_scan:
     project:
       name: "sjinks/ssh-honeypotd"
