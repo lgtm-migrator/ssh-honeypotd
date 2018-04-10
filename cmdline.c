@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,7 +53,13 @@ static void usage(struct globals_t* g)
 		"  -h, --help            display this help and exit\n"
 		"  -v, --version         output version information and exit\n\n"
 		"-k option must be specified at least once.\n\n"
-		"Please report bugs here: <https://github.com/sjinks/ssh-honeypotd/issues>\n"
+		"Please note:\n"
+		"  - ECDSA keys are supported if ssh-honeypotd is compiled against libssh 0.6.4+\n"
+		"  - ED25519 keys are supported if ssh-honeypotd is compiled against libssh 0.7.0+\n\n"
+		"ssh-honeypotd was compiled against libssh " SSH_STRINGIFY(LIBSSH_VERSION) "\n"
+		"libssh used: %s\n\n"
+		"Please report bugs here: <https://github.com/sjinks/ssh-honeypotd/issues>\n",
+		ssh_version(0)
 	);
 
 	exit(0);
@@ -64,8 +71,8 @@ __attribute__((noreturn))
 static void version(struct globals_t* g)
 {
 	printf(
-		"ssh-honeypotd 0.5\n"
-		"Copyright (c) 2014-2017, Volodymyr Kolesnykov <volodymyr@wildwolf.name>\n"
+		"ssh-honeypotd 1.0.1\n"
+		"Copyright (c) 2014-2018, Volodymyr Kolesnykov <volodymyr@wildwolf.name>\n"
 		"License: MIT <http://opensource.org/licenses/MIT>\n"
 	);
 
@@ -74,6 +81,8 @@ static void version(struct globals_t* g)
 
 void parse_options(int argc, char** argv, struct globals_t* g)
 {
+	assert(g != NULL);
+
 	while (1) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "r:d:e:k:b:p:P:n:u:g:vfh", long_options, &option_index);
@@ -94,16 +103,16 @@ void parse_options(int argc, char** argv, struct globals_t* g)
 				}
 
 				int key_type = ssh_key_type(key);
-				char* loc;
+				char** loc   = NULL;
 				switch (key_type) {
-					case SSH_KEYTYPE_DSS:     loc = g->dsa_key;     break;
-					case SSH_KEYTYPE_RSA:     loc = g->rsa_key;     break;
-					case SSH_KEYTYPE_RSA1:    loc = g->rsa_key;     break;
+					case SSH_KEYTYPE_DSS:     loc = &g->dsa_key;     break;
+					case SSH_KEYTYPE_RSA:     loc = &g->rsa_key;     break;
+					case SSH_KEYTYPE_RSA1:    loc = &g->rsa_key;     break;
 #ifdef SSH_KEYTYPE_ECDSA
-					case SSH_KEYTYPE_ECDSA:   loc = g->ecdsa_key;   break;
+					case SSH_KEYTYPE_ECDSA:   loc = &g->ecdsa_key;   break;
 #endif
 #ifdef SSH_KEYTYPE_ED25519
-					case SSH_KEYTYPE_ED25519: loc = g->ed25519_key; break;
+					case SSH_KEYTYPE_ED25519: loc = &g->ed25519_key; break;
 #endif
 					default:
 						fprintf(stderr, "WARNING: unsupported key type in %s\n", optarg);
@@ -112,9 +121,14 @@ void parse_options(int argc, char** argv, struct globals_t* g)
 				}
 
 				if (loc) {
-					free(loc);
-					loc = strdup(optarg);
+					if (*loc) {
+						free(*loc);
+					}
+
+					*loc = strdup(optarg);
 				}
+
+				break;
 			}
 
 			case 'b':
