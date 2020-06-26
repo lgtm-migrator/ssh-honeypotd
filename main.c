@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include <syslog.h>
 #include <errno.h>
 #include <libssh/server.h>
 #include "globals.h"
+#include "log.h"
 #include "daemon.h"
 #include "cmdline.h"
 #include "worker.h"
@@ -15,6 +15,22 @@
 #define SESSION_TIMEOUT  120
 
 struct globals_t globals;
+
+static void check_pid_file(struct globals_t* g)
+{
+	if (g->pid_file) {
+		g->pid_fd = create_pid_file(g->pid_file);
+		if (g->pid_fd == -1) {
+			fprintf(stderr, "Error creating PID file %s: %s\n", g->pid_file, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (g->pid_fd == -2) {
+			fprintf(stderr, "ssh-honeypotd is already running\n");
+			exit(EXIT_SUCCESS);
+		}
+	}
+}
 
 static void set_options(struct globals_t* g)
 {
@@ -90,7 +106,7 @@ static void spawn_thread(struct globals_t* g, pthread_attr_t* attr, ssh_session 
 	size_t num_threads;
 	struct connection_info_t* conn = malloc(sizeof(struct connection_info_t));
 	if (!conn) {
-		syslog(LOG_ALERT, "malloc() failed, out of memory");
+		my_log(LOG_ALERT, "malloc() failed, out of memory");
 		ssh_disconnect(session);
 		ssh_free(session);
 		return;
@@ -112,11 +128,11 @@ static void spawn_thread(struct globals_t* g, pthread_attr_t* attr, ssh_session 
 	pthread_mutex_unlock(&g->mutex);
 
 	if (num_threads > MAX_THREADS) {
-		syslog(LOG_ERR, "Too many connections");
+		my_log(LOG_ERR, "Too many connections");
 		finalize_connection(conn);
 	}
 	else if (pthread_create(&conn->thread, attr, worker, conn) != 0) {
-		syslog(LOG_CRIT, "pthread_create() failed");
+		my_log(LOG_CRIT, "pthread_create() failed");
 		finalize_connection(conn);
 	}
 }
@@ -133,11 +149,12 @@ static void main_loop(struct globals_t* g)
 		ssh_options_set(session, SSH_OPTIONS_TIMEOUT, &timeout);
 		int r = ssh_bind_accept(g->sshbind, session);
 		if (r == SSH_ERROR) {
+			ssh_free(session);
 			if (g->terminate) {
 				break;
 			}
 
-			syslog(LOG_WARNING, "Error accepting a connection: %s\n", ssh_get_error(g->sshbind));
+			my_log(LOG_WARNING, "Error accepting a connection: %s\n", ssh_get_error(g->sshbind));
 			continue;
 		}
 
@@ -157,18 +174,7 @@ int main(int argc, char** argv)
 	init_globals(&globals);
 	atexit(goodbye);
 	parse_options(argc, argv, &globals);
-
-	globals.pid_fd = create_pid_file(globals.pid_file);
-	if (globals.pid_fd == -1) {
-		fprintf(stderr, "Error creating PID file %s\n", globals.pid_file);
-		return EXIT_FAILURE;
-	}
-
-	if (globals.pid_fd == -2) {
-		fprintf(stderr, "ssh-honeypotd is already running\n");
-		return EXIT_SUCCESS;
-	}
-
+	check_pid_file(&globals);
 	set_options(&globals);
 
 	if (ssh_bind_listen(globals.sshbind) < 0) {
@@ -176,10 +182,13 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
-	openlog(globals.daemon_name, LOG_PID, LOG_AUTH);
+	if (!globals.no_syslog) {
+		openlog(globals.daemon_name, LOG_PID | LOG_CONS | (globals.foreground ? LOG_PERROR : 0), LOG_AUTH);
+	}
+
 	daemonize(&globals);
-	if (write_pid(globals.pid_fd)) {
-		syslog(LOG_CRIT, "Failed to write to the PID file: %s", strerror(errno));
+	if (globals.pid_file && write_pid(globals.pid_fd)) {
+		my_log(LOG_CRIT, "Failed to write to the PID file: %s", strerror(errno));
 		return EXIT_FAILURE;
 	}
 

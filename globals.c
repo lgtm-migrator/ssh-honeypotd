@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <libssh/callbacks.h>
 #include "globals.h"
+#include "log.h"
 
 void init_globals(struct globals_t* g)
 {
@@ -44,8 +46,13 @@ static void wait_for_threads(struct globals_t* g)
 void free_globals(struct globals_t* g)
 {
 	if (g->pid_fd >= 0) {
-		unlink(g->pid_file);
-		close(g->pid_fd);
+		if (-1 == unlink(g->pid_file)) {
+			my_log(LOG_DAEMON | LOG_WARNING, "WARNING: Failed to delete the PID file %s: %s", g->pid_file, strerror(errno));
+		}
+
+		if (-1 == close(g->pid_fd)) {
+			my_log(LOG_DAEMON | LOG_WARNING, "WARNING: Failed to delete the PID file %s: %s", g->pid_file, strerror(errno));
+		}
 	}
 
 	free(g->rsa_key);
@@ -62,4 +69,8 @@ void free_globals(struct globals_t* g)
 
 	ssh_bind_free(g->sshbind);
 	ssh_finalize();
+
+	if (!g->no_syslog) {
+		closelog();
+	}
 }
